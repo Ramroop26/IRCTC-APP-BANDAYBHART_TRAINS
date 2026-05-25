@@ -7,6 +7,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Default root route
+app.get('/', (req, res) => {
+  res.send('IRCTC Backend is running successfully on Cloud Run! 🚀');
+});
+
 // Helper to generate a 10-digit PNR
 function generatePnr() {
   let pnr = (Math.floor(Math.random() * 4) * 2 + 2).toString(); // Starts with 2, 4, 6, 8

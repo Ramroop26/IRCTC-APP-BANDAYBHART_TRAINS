@@ -38,7 +38,7 @@ async function initializeDatabase() {
     await createTables();
   } catch (error) {
     console.error('Error during database initialization:', error);
-    process.exit(1);
+    // process.exit(1); // Disabled so Cloud Run doesn't crash without a database
   }
 }
 

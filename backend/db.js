@@ -1,128 +1,133 @@
-const mysql = require('mysql2/promise');
-require('dotenv').config();
+// db.js (Mock In-Memory Database)
 
-// Create connection configuration
-const connectionConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '1234',
-  port: parseInt(process.env.DB_PORT || '3306'),
+let db = {
+  users: [],
+  wallet: [],
+  wallet_transactions: [],
+  bookings: [],
+  passengers: []
 };
 
-let pool;
-
 async function initializeDatabase() {
-  try {
-    const dbName = process.env.DB_NAME || 'irctc_db';
-    const isLocalhost = connectionConfig.host === 'localhost' || connectionConfig.host === '127.0.0.1';
+  console.log('Using IN-MEMORY Mock Database. Data will be lost on restart.');
+}
 
-    if (isLocalhost) {
-      // 1. Create a temporary connection to create database if not exists
-      const tempConnection = await mysql.createConnection(connectionConfig);
-      await tempConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\`;`);
-      await tempConnection.end();
-      console.log(`Database '${dbName}' verified/created.`);
-    }
-
-    // 2. Create the connection pool with the database specified
-    pool = mysql.createPool({
-      ...connectionConfig,
-      database: dbName,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined
+async function executeQuery(sql, params = []) {
+  sql = sql.trim().replace(/\s+/g, ' ');
+  
+  if (sql.includes('SELECT email FROM users WHERE email = ?')) {
+    return db.users.filter(u => u.email === params[0]);
+  }
+  if (sql.includes('INSERT INTO users')) {
+    db.users.push({ email: params[0], name: params[1], pin: params[2], aadhaar: params[3], mobile: params[4], created_at: new Date() });
+    return [];
+  }
+  if (sql.includes('INSERT INTO wallet (user_email, balance)')) {
+    db.wallet.push({ user_email: params[0], balance: params[1] });
+    return [];
+  }
+  if (sql.includes('INSERT INTO wallet_transactions')) {
+    db.wallet_transactions.push({ id: params[0], user_email: params[1], amount: params[2], type: params[3], description: params[4], date: new Date() });
+    return [];
+  }
+  if (sql.includes('SELECT * FROM users WHERE pin = ?')) {
+    return db.users.filter(u => u.pin === params[0]);
+  }
+  if (sql.includes('SELECT * FROM users WHERE email = ? AND pin = ?')) {
+    return db.users.filter(u => u.email === params[0] && u.pin === params[1]);
+  }
+  if (sql.includes('SELECT * FROM users WHERE email = ?')) {
+    return db.users.filter(u => u.email === params[0]);
+  }
+  if (sql.includes('UPDATE users SET mobile')) {
+    const user = db.users.find(u => u.email === params[1]);
+    if (user) user.mobile = params[0];
+    return [];
+  }
+  if (sql.includes('UPDATE users SET aadhaar')) {
+    const user = db.users.find(u => u.email === params[1]);
+    if (user) user.aadhaar = params[0];
+    return [];
+  }
+  if (sql.includes('SELECT COUNT(*) as count FROM users')) {
+    return [{ count: db.users.length }];
+  }
+  if (sql.includes('ORDER BY created_at DESC LIMIT 1')) {
+    if (db.users.length === 0) return [];
+    return [db.users[db.users.length - 1]];
+  }
+  if (sql.includes('SELECT balance FROM wallet WHERE user_email = ?')) {
+    return db.wallet.filter(w => w.user_email === params[0]);
+  }
+  if (sql.includes('SELECT * FROM wallet_transactions')) {
+    return db.wallet_transactions.filter(t => t.user_email === params[0]).reverse();
+  }
+  if (sql.includes('UPDATE wallet SET balance = balance + ?')) {
+    const w = db.wallet.find(w => w.user_email === params[1]);
+    if (w) w.balance = parseFloat(w.balance) + parseFloat(params[0]);
+    return [];
+  }
+  if (sql.includes('UPDATE wallet SET balance = balance - ?')) {
+    const w = db.wallet.find(w => w.user_email === params[1]);
+    if (w) w.balance = parseFloat(w.balance) - parseFloat(params[0]);
+    return [];
+  }
+  if (sql.includes('SELECT * FROM bookings WHERE user_email = ?')) {
+    return db.bookings.filter(b => b.user_email === params[0]).reverse();
+  }
+  if (sql.includes('SELECT * FROM passengers WHERE booking_pnr = ?')) {
+    return db.passengers.filter(p => p.booking_pnr === params[0]);
+  }
+  if (sql.includes('INSERT INTO bookings')) {
+    db.bookings.push({
+      pnr: params[0], train_number: params[1], train_name: params[2], source: params[3], destination: params[4],
+      departure_time: params[5], arrival_time: params[6], journey_date: params[7], status: params[8], total_amount: params[9],
+      payment_mode: params[10], transaction_id: params[11], user_email: params[12], booking_date: new Date()
     });
-
-    // 3. Create tables
-    await createTables();
-  } catch (error) {
-    console.error('Error during database initialization:', error);
-    // process.exit(1); // Disabled so Cloud Run doesn't crash without a database
+    return [];
   }
-}
-
-async function createTables() {
-  const queries = [
-    // Users table
-    `CREATE TABLE IF NOT EXISTS users (
-      email VARCHAR(255) PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      pin VARCHAR(10) NOT NULL,
-      aadhaar VARCHAR(20) NOT NULL,
-      mobile VARCHAR(20) NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );`,
-
-    // Bookings table
-    `CREATE TABLE IF NOT EXISTS bookings (
-      pnr VARCHAR(20) PRIMARY KEY,
-      train_number VARCHAR(20) NOT NULL,
-      train_name VARCHAR(255) NOT NULL,
-      source VARCHAR(255) NOT NULL,
-      destination VARCHAR(255) NOT NULL,
-      departure_time VARCHAR(20) NOT NULL,
-      arrival_time VARCHAR(20) NOT NULL,
-      journey_date VARCHAR(20) NOT NULL,
-      status VARCHAR(50) NOT NULL DEFAULT 'CONFIRMED',
-      total_amount DECIMAL(10, 2) NOT NULL,
-      payment_mode VARCHAR(100) NOT NULL,
-      transaction_id VARCHAR(255) NOT NULL,
-      booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      user_email VARCHAR(255) NOT NULL,
-      FOREIGN KEY (user_email) REFERENCES users(email) ON DELETE CASCADE
-    );`,
-
-    // Passengers table
-    `CREATE TABLE IF NOT EXISTS passengers (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      booking_pnr VARCHAR(20) NOT NULL,
-      name VARCHAR(255) NOT NULL,
-      age INT NOT NULL,
-      gender VARCHAR(20) NOT NULL,
-      berth_preference VARCHAR(50) NOT NULL,
-      coach VARCHAR(20),
-      seat_number VARCHAR(20),
-      FOREIGN KEY (booking_pnr) REFERENCES bookings(pnr) ON DELETE CASCADE
-    );`,
-
-    // Wallet table
-    `CREATE TABLE IF NOT EXISTS wallet (
-      user_email VARCHAR(255) PRIMARY KEY,
-      balance DECIMAL(10, 2) NOT NULL DEFAULT 5000.00,
-      FOREIGN KEY (user_email) REFERENCES users(email) ON DELETE CASCADE
-    );`,
-
-    // Wallet transactions table
-    `CREATE TABLE IF NOT EXISTS wallet_transactions (
-      id VARCHAR(255) PRIMARY KEY,
-      user_email VARCHAR(255) NOT NULL,
-      amount DECIMAL(10, 2) NOT NULL,
-      type VARCHAR(20) NOT NULL,
-      description VARCHAR(255) NOT NULL,
-      date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_email) REFERENCES users(email) ON DELETE CASCADE
-    );`
-  ];
-
-  for (const query of queries) {
-    await pool.query(query);
+  if (sql.includes('INSERT INTO passengers')) {
+    db.passengers.push({
+      id: db.passengers.length + 1, booking_pnr: params[0], name: params[1], age: params[2], gender: params[3],
+      berth_preference: params[4], coach: params[5], seat_number: params[6]
+    });
+    return [];
+  }
+  if (sql.includes('SELECT * FROM bookings WHERE pnr = ?')) {
+    return db.bookings.filter(b => b.pnr === params[0]);
+  }
+  if (sql.includes('UPDATE bookings SET status = ? WHERE pnr = ?')) {
+    const b = db.bookings.find(b => b.pnr === params[1]);
+    if (b) b.status = params[0];
+    return [];
+  }
+  if (sql.includes('SELECT id FROM passengers WHERE booking_pnr = ?')) {
+    return db.passengers.filter(p => p.booking_pnr === params[0]);
   }
 
-  console.log('Database tables successfully verified/created.');
+  console.log('UNHANDLED QUERY:', sql);
+  return [];
 }
 
-// Helper query function
 async function query(sql, params) {
-  if (!pool) {
-    throw new Error('Database pool not initialized. Call initializeDatabase first.');
-  }
-  const [results] = await pool.execute(sql, params);
-  return results;
+  return executeQuery(sql, params);
 }
+
+const mockPool = {
+  getConnection: async () => ({
+    query: async (sql, params) => {
+      const res = await executeQuery(sql, params);
+      return [res, []];
+    },
+    beginTransaction: async () => {},
+    commit: async () => {},
+    rollback: async () => {},
+    release: () => {}
+  })
+};
 
 module.exports = {
   initializeDatabase,
   query,
-  getPool: () => pool
+  getPool: () => mockPool
 };

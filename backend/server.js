@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 const db = require('./db');
 
@@ -7,10 +8,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Default root route
-app.get('/', (req, res) => {
-  res.send('IRCTC Backend is running successfully on Cloud Run! 🚀');
-});
+// Serve static frontend files (Flutter Web app)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Helper to generate a 10-digit PNR
 function generatePnr() {
@@ -524,6 +523,11 @@ app.post('/api/bookings/cancel', async (req, res) => {
   }
 });
 
+
+// Catch-all route to serve the frontend index.html for any other requests (for client-side routing)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // Start server after database initialization
 const PORT = process.env.PORT || 3000;

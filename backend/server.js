@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 const db = require('./db');
+const { initKafka, sendBookingEvent } = require('./kafka');
 
 const app = express();
 app.use(cors());
@@ -457,6 +458,19 @@ app.post('/api/bookings/create', async (req, res) => {
     await conn.commit();
     conn.release();
 
+    // Fire and forget Kafka event for the new booking
+    sendBookingEvent({
+      pnr,
+      trainNumber,
+      trainName,
+      source,
+      destination,
+      journeyDate,
+      totalAmount,
+      userEmail: normalizedEmail,
+      status: 'CONFIRMED'
+    });
+
     return res.json({ success: true, pnr, message: 'Booking created successfully!' });
   } catch (error) {
     await conn.rollback();
@@ -529,9 +543,9 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Start server after database initialization
+// Start server after database and Kafka initialization
 const PORT = process.env.PORT || 3000;
-db.initializeDatabase().then(() => {
+Promise.all([db.initializeDatabase(), initKafka()]).then(() => {
   app.listen(PORT, () => {
     console.log(`IRCTC Backend Server listening on port ${PORT}`);
   });

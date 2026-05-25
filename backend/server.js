@@ -2,8 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
+
 const db = require('./db');
 const { initKafka, sendBookingEvent } = require('./kafka');
+
+// Mongoose Models
+const User = require('./models/User');
+const Wallet = require('./models/Wallet');
+const Transaction = require('./models/Transaction');
+const Booking = require('./models/Booking');
 
 const app = express();
 app.use(cors());
@@ -35,27 +42,26 @@ app.post('/api/auth/register', async (req, res) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    // Check if email already registered
-    const existing = await db.query('SELECT email FROM users WHERE email = ?', [normalizedEmail]);
-    if (existing.length > 0) {
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
       return res.status(400).json({ success: false, message: 'Email is already registered.' });
     }
 
-    // Insert user
-    await db.query(
-      'INSERT INTO users (email, name, pin, aadhaar, mobile) VALUES (?, ?, ?, ?, ?)',
-      [normalizedEmail, name.trim(), pin, aadhaar, mobile]
-    );
+    const newUser = new User({ email: normalizedEmail, name: name.trim(), pin, aadhaar, mobile });
+    await newUser.save();
 
-    // Initialize wallet with default ₹5000.00
-    await db.query('INSERT INTO wallet (user_email, balance) VALUES (?, ?)', [normalizedEmail, 5000.00]);
+    const newWallet = new Wallet({ user_email: normalizedEmail, balance: 5000.00 });
+    await newWallet.save();
 
-    // Log initial activation credit transaction
     const txnId = `TXN${Date.now()}`;
-    await db.query(
-      'INSERT INTO wallet_transactions (id, user_email, amount, type, description) VALUES (?, ?, ?, ?, ?)',
-      [txnId, normalizedEmail, 5000.00, 'credit', 'Initial eWallet Activation Credit']
-    );
+    const newTxn = new Transaction({
+      id: txnId,
+      user_email: normalizedEmail,
+      amount: 5000.00,
+      type: 'credit',
+      description: 'Initial eWallet Activation Credit'
+    });
+    await newTxn.save();
 
     return res.json({ success: true, message: 'Registration successful!' });
   } catch (error) {
@@ -72,13 +78,11 @@ app.post('/api/auth/login-pin', async (req, res) => {
   }
 
   try {
-    const users = await db.query('SELECT * FROM users WHERE pin = ?', [pin]);
-    if (users.length === 0) {
+    const user = await User.findOne({ pin });
+    if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid PIN.' });
     }
 
-    // Return the matched user
-    const user = users[0];
     return res.json({
       success: true,
       user: {
@@ -105,12 +109,11 @@ app.post('/api/auth/login-email-pin', async (req, res) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    const users = await db.query('SELECT * FROM users WHERE email = ? AND pin = ?', [normalizedEmail, pin]);
-    if (users.length === 0) {
+    const user = await User.findOne({ email: normalizedEmail, pin });
+    if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid credentials.' });
     }
 
-    const user = users[0];
     return res.json({
       success: true,
       user: {
@@ -135,12 +138,11 @@ app.get('/api/auth/profile', async (req, res) => {
   }
 
   try {
-    const users = await db.query('SELECT * FROM users WHERE email = ?', [email.toLowerCase().trim()]);
-    if (users.length === 0) {
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    const user = users[0];
     return res.json({
       success: true,
       user: {
@@ -165,12 +167,11 @@ app.post('/api/auth/update-profile', async (req, res) => {
   }
 
   try {
-    if (mobile !== undefined) {
-      await db.query('UPDATE users SET mobile = ? WHERE email = ?', [mobile, email.toLowerCase().trim()]);
-    }
-    if (aadhaar !== undefined) {
-      await db.query('UPDATE users SET aadhaar = ? WHERE email = ?', [aadhaar, email.toLowerCase().trim()]);
-    }
+    const updates = {};
+    if (mobile !== undefined) updates.mobile = mobile;
+    if (aadhaar !== undefined) updates.aadhaar = aadhaar;
+
+    await User.updateOne({ email: email.toLowerCase().trim() }, { $set: updates });
 
     return res.json({ success: true, message: 'Profile updated successfully.' });
   } catch (error) {
@@ -182,8 +183,7 @@ app.post('/api/auth/update-profile', async (req, res) => {
 // Check if there are any registered users
 app.get('/api/auth/has-users', async (req, res) => {
   try {
-    const result = await db.query('SELECT COUNT(*) as count FROM users');
-    const count = result[0].count;
+    const count = await User.countDocuments();
     return res.json({ success: true, hasUsers: count > 0 });
   } catch (error) {
     console.error('Has-users check error:', error);
@@ -194,11 +194,10 @@ app.get('/api/auth/has-users', async (req, res) => {
 // Get the last registered user
 app.get('/api/auth/last-user', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM users ORDER BY created_at DESC LIMIT 1');
-    if (result.length === 0) {
+    const user = await User.findOne().sort({ created_at: -1 });
+    if (!user) {
       return res.status(404).json({ success: false, message: 'No registered users found.' });
     }
-    const user = result[0];
     return res.json({
       success: true,
       user: {
@@ -230,22 +229,19 @@ app.get('/api/wallet/balance', async (req, res) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    const wallets = await db.query('SELECT balance FROM wallet WHERE user_email = ?', [normalizedEmail]);
-    if (wallets.length === 0) {
+    const wallet = await Wallet.findOne({ user_email: normalizedEmail });
+    if (!wallet) {
       return res.status(404).json({ success: false, message: 'Wallet not found.' });
     }
 
-    const transactions = await db.query(
-      'SELECT * FROM wallet_transactions WHERE user_email = ? ORDER BY date DESC',
-      [normalizedEmail]
-    );
+    const transactions = await Transaction.find({ user_email: normalizedEmail }).sort({ date: -1 });
 
     return res.json({
       success: true,
-      balance: parseFloat(wallets[0].balance),
+      balance: wallet.balance,
       transactions: transactions.map(t => ({
         id: t.id,
-        amount: parseFloat(t.amount),
+        amount: t.amount,
         type: t.type,
         description: t.description,
         date: t.date
@@ -267,15 +263,17 @@ app.post('/api/wallet/deposit', async (req, res) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    // Add to balance
-    await db.query('UPDATE wallet SET balance = balance + ? WHERE user_email = ?', [amount, normalizedEmail]);
+    await Wallet.updateOne({ user_email: normalizedEmail }, { $inc: { balance: amount } });
 
-    // Log transaction
     const txnId = `TXN${Date.now()}`;
-    await db.query(
-      'INSERT INTO wallet_transactions (id, user_email, amount, type, description) VALUES (?, ?, ?, ?, ?)',
-      [txnId, normalizedEmail, amount, 'credit', 'Add Money to eWallet']
-    );
+    const txn = new Transaction({
+      id: txnId,
+      user_email: normalizedEmail,
+      amount: amount,
+      type: 'credit',
+      description: 'Add Money to eWallet'
+    });
+    await txn.save();
 
     return res.json({ success: true, message: 'Funds deposited successfully.' });
   } catch (error) {
@@ -294,26 +292,26 @@ app.post('/api/wallet/withdraw', async (req, res) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    // Check balance
-    const wallets = await db.query('SELECT balance FROM wallet WHERE user_email = ?', [normalizedEmail]);
-    if (wallets.length === 0) {
+    const wallet = await Wallet.findOne({ user_email: normalizedEmail });
+    if (!wallet) {
       return res.status(404).json({ success: false, message: 'Wallet not found.' });
     }
 
-    const currentBalance = parseFloat(wallets[0].balance);
-    if (currentBalance < amount) {
+    if (wallet.balance < amount) {
       return res.status(400).json({ success: false, message: 'Insufficient funds.' });
     }
 
-    // Deduct
-    await db.query('UPDATE wallet SET balance = balance - ? WHERE user_email = ?', [amount, normalizedEmail]);
+    await Wallet.updateOne({ user_email: normalizedEmail }, { $inc: { balance: -amount } });
 
-    // Log transaction
     const txnId = `TXN${Date.now()}`;
-    await db.query(
-      'INSERT INTO wallet_transactions (id, user_email, amount, type, description) VALUES (?, ?, ?, ?, ?)',
-      [txnId, normalizedEmail, amount, 'debit', `Withdrawal to Bank: ${bankDetails}`]
-    );
+    const txn = new Transaction({
+      id: txnId,
+      user_email: normalizedEmail,
+      amount: amount,
+      type: 'debit',
+      description: `Withdrawal to Bank: ${bankDetails}`
+    });
+    await txn.save();
 
     return res.json({ success: true, message: 'Withdrawal completed.' });
   } catch (error) {
@@ -337,45 +335,36 @@ app.get('/api/bookings', async (req, res) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    // 1. Fetch bookings
-    const bookings = await db.query(
-      'SELECT * FROM bookings WHERE user_email = ? ORDER BY booking_date DESC',
-      [normalizedEmail]
-    );
+    const bookings = await Booking.find({ user_email: normalizedEmail }).sort({ booking_date: -1 });
 
-    // 2. Fetch passengers for each booking
-    const results = [];
-    for (const b of bookings) {
-      const passengers = await db.query('SELECT * FROM passengers WHERE booking_pnr = ?', [b.pnr]);
-      results.push({
-        pnr: b.pnr,
-        train: {
-          number: b.train_number,
-          name: b.train_name,
-          source: b.source,
-          destination: b.destination,
-          departureTime: b.departure_time,
-          arrivalTime: b.arrival_time,
-          classes: ['CC', 'EC', 'GEN', '3A', '2A', '1A'] // Mock classes schema support
-        },
-        journeyDate: b.journey_date,
-        passengers: passengers.map(p => ({
-          name: p.name,
-          age: p.age,
-          gender: p.gender,
-          berthPreference: p.berth_preference,
-          coach: p.coach,
-          seatNumber: p.seat_number
-        })),
-        status: b.status,
-        totalAmount: parseFloat(b.total_amount),
-        paymentMode: b.payment_mode,
-        transactionId: b.transaction_id,
-        bookingDate: b.booking_date,
-        bookedSource: b.source,
-        bookedDestination: b.destination
-      });
-    }
+    const results = bookings.map(b => ({
+      pnr: b.pnr,
+      train: {
+        number: b.train_number,
+        name: b.train_name,
+        source: b.source,
+        destination: b.destination,
+        departureTime: b.departure_time,
+        arrivalTime: b.arrival_time,
+        classes: ['CC', 'EC', 'GEN', '3A', '2A', '1A']
+      },
+      journeyDate: b.journey_date,
+      passengers: b.passengers.map(p => ({
+        name: p.name,
+        age: p.age,
+        gender: p.gender,
+        berthPreference: p.berth_preference,
+        coach: p.coach,
+        seatNumber: p.seat_number
+      })),
+      status: b.status,
+      totalAmount: b.total_amount,
+      paymentMode: b.payment_mode,
+      transactionId: b.transaction_id,
+      bookingDate: b.booking_date,
+      bookedSource: b.source,
+      bookedDestination: b.destination
+    }));
 
     return res.json({ success: true, bookings: results });
   } catch (error) {
@@ -405,58 +394,63 @@ app.post('/api/bookings/create', async (req, res) => {
   }
 
   const normalizedEmail = email.toLowerCase().trim();
-  const conn = await db.getPool().getConnection();
 
   try {
-    await conn.beginTransaction();
-
-    // 1. If payment mode is eWallet, check balance and deduct
     if (paymentMode === 'IRCTC eWallet') {
-      const [wallets] = await conn.query('SELECT balance FROM wallet WHERE user_email = ?', [normalizedEmail]);
-      if (wallets.length === 0) {
-        throw new Error('Wallet not found.');
-      }
-      const balance = parseFloat(wallets[0].balance);
-      if (balance < totalAmount) {
+      const wallet = await Wallet.findOne({ user_email: normalizedEmail });
+      if (!wallet) return res.status(404).json({ success: false, message: 'Wallet not found.' });
+      
+      if (wallet.balance < totalAmount) {
         return res.status(400).json({ success: false, message: 'Insufficient wallet balance.' });
       }
 
-      // Deduct
-      await conn.query('UPDATE wallet SET balance = balance - ? WHERE user_email = ?', [totalAmount, normalizedEmail]);
+      await Wallet.updateOne({ user_email: normalizedEmail }, { $inc: { balance: -totalAmount } });
 
-      // Log transaction
       const txnId = `TXN${Date.now()}`;
-      await conn.query(
-        'INSERT INTO wallet_transactions (id, user_email, amount, type, description) VALUES (?, ?, ?, ?, ?)',
-        [txnId, normalizedEmail, totalAmount, 'debit', `Ticket Booking: PNR Generation (${trainNumber})`]
-      );
+      const txn = new Transaction({
+        id: txnId,
+        user_email: normalizedEmail,
+        amount: totalAmount,
+        type: 'debit',
+        description: `Ticket Booking: PNR Generation (${trainNumber})`
+      });
+      await txn.save();
     }
 
-    // 2. Generate PNR and booking fields
     const pnr = generatePnr();
     const transactionId = `TXN${Date.now()}`;
 
-    // 3. Insert booking
-    await conn.query(
-      'INSERT INTO bookings (pnr, train_number, train_name, source, destination, departure_time, arrival_time, journey_date, status, total_amount, payment_mode, transaction_id, user_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [pnr, trainNumber, trainName, source, destination, departureTime, arrivalTime, journeyDate, 'CONFIRMED', totalAmount, paymentMode, transactionId, normalizedEmail]
-    );
-
-    // 4. Assign mock coach/seat numbers and insert passengers
     const coachPrefix = trainName.includes('VANDE') || trainName.includes('SHATABDI') ? 'C' : 'S';
     const coachNum = Math.floor(Math.random() * 6) + 1;
     const coach = `${coachPrefix}${coachNum}`;
 
-    for (const p of passengers) {
-      const seatNumber = (Math.floor(Math.random() * 72) + 1).toString();
-      await conn.query(
-        'INSERT INTO passengers (booking_pnr, name, age, gender, berth_preference, coach, seat_number) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [pnr, p.name, p.age, p.gender, p.berthPreference, coach, seatNumber]
-      );
-    }
+    const mappedPassengers = passengers.map(p => ({
+      name: p.name,
+      age: p.age,
+      gender: p.gender,
+      berth_preference: p.berthPreference,
+      coach: coach,
+      seat_number: (Math.floor(Math.random() * 72) + 1).toString()
+    }));
 
-    await conn.commit();
-    conn.release();
+    const newBooking = new Booking({
+      pnr,
+      train_number: trainNumber,
+      train_name: trainName,
+      source,
+      destination,
+      departure_time: departureTime,
+      arrival_time: arrivalTime,
+      journey_date: journeyDate,
+      status: 'CONFIRMED',
+      total_amount: totalAmount,
+      payment_mode: paymentMode,
+      transaction_id: transactionId,
+      user_email: normalizedEmail,
+      passengers: mappedPassengers
+    });
+
+    await newBooking.save();
 
     // Fire and forget Kafka event for the new booking
     sendBookingEvent({
@@ -473,8 +467,6 @@ app.post('/api/bookings/create', async (req, res) => {
 
     return res.json({ success: true, pnr, message: 'Booking created successfully!' });
   } catch (error) {
-    await conn.rollback();
-    conn.release();
     console.error('Booking creation error:', error);
     return res.status(500).json({ success: false, message: error.message || 'Internal server error during booking.' });
   }
@@ -487,56 +479,43 @@ app.post('/api/bookings/cancel', async (req, res) => {
     return res.status(400).json({ success: false, message: 'PNR is required.' });
   }
 
-  const conn = await db.getPool().getConnection();
-
   try {
-    await conn.beginTransaction();
-
-    // 1. Fetch booking details
-    const [bookings] = await conn.query('SELECT * FROM bookings WHERE pnr = ?', [pnr]);
-    if (bookings.length === 0) {
+    const booking = await Booking.findOne({ pnr });
+    if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found.' });
     }
 
-    const booking = bookings[0];
     if (booking.status === 'CANCELLED') {
       return res.status(400).json({ success: false, message: 'Ticket is already cancelled.' });
     }
 
-    // 2. Update booking status
-    await conn.query('UPDATE bookings SET status = ? WHERE pnr = ?', ['CANCELLED', pnr]);
+    booking.status = 'CANCELLED';
+    await booking.save();
 
-    // 3. Count passengers to calculate fee (₹120 per passenger)
-    const [passengers] = await conn.query('SELECT id FROM passengers WHERE booking_pnr = ?', [pnr]);
-    const passengersCount = passengers.length;
+    const passengersCount = booking.passengers.length;
     const cancellationFee = passengersCount * 120.00;
-    const totalAmount = parseFloat(booking.total_amount);
-    const refundAmount = Math.max(0.0, totalAmount - cancellationFee);
+    const refundAmount = Math.max(0.0, booking.total_amount - cancellationFee);
 
-    // 4. If paid via eWallet, refund
     if (booking.payment_mode === 'IRCTC eWallet' && refundAmount > 0) {
-      await conn.query('UPDATE wallet SET balance = balance + ? WHERE user_email = ?', [refundAmount, booking.user_email]);
+      await Wallet.updateOne({ user_email: booking.user_email }, { $inc: { balance: refundAmount } });
 
-      // Log transaction
       const txnId = `TXN${Date.now()}`;
-      await conn.query(
-        'INSERT INTO wallet_transactions (id, user_email, amount, type, description) VALUES (?, ?, ?, ?, ?)',
-        [txnId, booking.user_email, refundAmount, 'credit', `Cancellation Refund for PNR ${pnr}`]
-      );
+      const txn = new Transaction({
+        id: txnId,
+        user_email: booking.user_email,
+        amount: refundAmount,
+        type: 'credit',
+        description: `Cancellation Refund for PNR ${pnr}`
+      });
+      await txn.save();
     }
-
-    await conn.commit();
-    conn.release();
 
     return res.json({ success: true, message: 'Booking cancelled. Refund processed.' });
   } catch (error) {
-    await conn.rollback();
-    conn.release();
     console.error('Booking cancellation error:', error);
     return res.status(500).json({ success: false, message: 'Internal server error.' });
   }
 });
-
 
 // Catch-all route to serve the frontend index.html for any other requests (for client-side routing)
 app.get('*', (req, res) => {

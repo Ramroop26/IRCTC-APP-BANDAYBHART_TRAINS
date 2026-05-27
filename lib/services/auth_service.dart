@@ -1,3 +1,4 @@
+import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
@@ -15,6 +16,10 @@ class AuthService extends ChangeNotifier {
   }
 
   final LocalAuthentication _localAuth = LocalAuthentication();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+  );
+  
   bool _isLoggedIn = false;
   
   // Active user details
@@ -350,12 +355,27 @@ class AuthService extends ChangeNotifier {
     return false;
   }
 
-  // Google Login Simulation
+  // Real Google Login
   Future<bool> loginWithGoogle() async {
     try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        // User aborted the sign-in
+        return false;
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        debugPrint("Google sign in failed: No ID Token returned");
+        return false;
+      }
+
       final res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/auth/google-login'),
         headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'idToken': idToken}),
       );
 
       if (res.statusCode == 200) {
@@ -379,17 +399,7 @@ class AuthService extends ChangeNotifier {
     } catch (e) {
       debugPrint("Google login error: $e");
     }
-    // Fallback if backend is unreachable
-    await Future.delayed(const Duration(seconds: 2));
-    _userName = 'Google User';
-    _userPin = '1234';
-    _userEmail = 'google@example.com';
-    _userAadhaar = '123456789012';
-    _userMobile = '9999999999';
-    _isLoggedIn = true;
-    _hasRegisteredUsers = true;
-    notifyListeners();
-    return true;
+    return false;
   }
 
   void logout() {

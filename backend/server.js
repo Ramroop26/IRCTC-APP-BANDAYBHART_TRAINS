@@ -243,12 +243,26 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   }
 });
 
-// Google Login Simulation
+const { OAuth2Client } = require('google-auth-library');
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+// Google Login Verification
 app.post('/api/auth/google-login', async (req, res) => {
   try {
-    // Since this is a simulation without real OAuth tokens, we'll just auto-login a dummy Google user
-    // In a real app, you would verify the Google idToken here using google-auth-library
-    const normalizedEmail = 'googleuser@gmail.com';
+    const { idToken } = req.body;
+    if (!idToken) {
+      return res.status(400).json({ success: false, message: 'ID Token is required.' });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: idToken,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const normalizedEmail = payload['email'].toLowerCase().trim();
+    const name = payload['name'] || 'Google User';
+
     let user = await User.findOne({ email: normalizedEmail });
     let isNewUser = false;
 
@@ -256,10 +270,10 @@ app.post('/api/auth/google-login', async (req, res) => {
       isNewUser = true;
       user = new User({ 
         email: normalizedEmail, 
-        name: 'Google User', 
+        name: name, 
         pin: '1234', 
-        aadhaar: '123456789012', 
-        mobile: '9999999999' 
+        aadhaar: '000000000000', 
+        mobile: '0000000000' 
       });
       await user.save();
       
@@ -280,7 +294,7 @@ app.post('/api/auth/google-login', async (req, res) => {
     });
   } catch (error) {
     console.error('Google login error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error.' });
+    return res.status(500).json({ success: false, message: 'Google Auth Failed: ' + error.message });
   }
 });
 

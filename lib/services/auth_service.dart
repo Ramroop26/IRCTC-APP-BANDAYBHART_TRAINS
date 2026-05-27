@@ -358,7 +358,7 @@ class AuthService extends ChangeNotifier {
   // Real Google Login
   Future<bool> loginWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      final GoogleSignInAccount? googleUser = await _googleSignIn.authenticate();
       if (googleUser == null) {
         // User aborted the sign-in
         return false;

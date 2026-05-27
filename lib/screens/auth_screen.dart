@@ -16,8 +16,15 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   // Login State
   final List<TextEditingController> _pinControllers = List.generate(4, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
-  int _selectedTab = 0; // 0: PIN, 1: Touch ID, 2: Face ID
+  int _selectedTab = 0; // 0: PIN, 1: Touch ID, 2: Face ID, 3: OTP
   String _errorMessage = "";
+
+  // OTP & Google State
+  final _otpPhoneController = TextEditingController();
+  final _otpCodeController = TextEditingController();
+  bool _isOtpSent = false;
+  bool _isGoogleLoading = false;
+  bool _isOtpLoading = false;
 
   // Registration State
   bool _isRegistering = false;
@@ -41,6 +48,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     _regPinController.dispose();
     _regAadhaarController.dispose();
     _regMobileController.dispose();
+    _otpPhoneController.dispose();
+    _otpCodeController.dispose();
     super.dispose();
   }
 
@@ -331,8 +340,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           child: Row(
             children: [
               _buildTabItem(0, "PIN", Icons.lock_outline),
-              _buildTabItem(1, "Touch ID", Icons.fingerprint_rounded),
-              _buildTabItem(2, "Face ID", Icons.face_unlock_rounded),
+              _buildTabItem(1, "Touch", Icons.fingerprint_rounded),
+              _buildTabItem(2, "Face", Icons.face_unlock_rounded),
+              _buildTabItem(3, "OTP", Icons.message_rounded),
             ],
           ),
         ),
@@ -340,6 +350,20 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
 
         // Auth Form depending on tab
         _buildAuthBody(),
+
+        const SizedBox(height: 32),
+        const Row(
+          children: [
+            Expanded(child: Divider(color: AppTheme.primaryLightNavy)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Text("OR", style: TextStyle(color: AppTheme.textMuted, fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+            Expanded(child: Divider(color: AppTheme.primaryLightNavy)),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _buildGoogleLoginButton(),
       ],
     );
   }
@@ -536,8 +560,176 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             onAuthenticationComplete: _onBiometricAuthenticated,
           ),
         );
+      case 3:
+        return _buildOtpBody();
       default:
         return const SizedBox.shrink();
     }
   }
+
+  void _handleSendOtp() async {
+    if (_otpPhoneController.text.length != 10) {
+      setState(() => _errorMessage = "Enter valid 10-digit mobile number.");
+      return;
+    }
+    setState(() {
+      _isOtpLoading = true;
+      _errorMessage = "";
+    });
+    final success = await _authService.requestOTP(_otpPhoneController.text);
+    setState(() {
+      _isOtpLoading = false;
+      if (success) {
+        _isOtpSent = true;
+      } else {
+        _errorMessage = "Failed to send OTP.";
+      }
+    });
+  }
+
+  void _handleVerifyOtp() async {
+    if (_otpCodeController.text.length < 4) {
+      setState(() => _errorMessage = "Enter valid OTP.");
+      return;
+    }
+    setState(() {
+      _isOtpLoading = true;
+      _errorMessage = "";
+    });
+    final success = await _authService.verifyOTP(_otpPhoneController.text, _otpCodeController.text);
+    setState(() {
+      _isOtpLoading = false;
+    });
+    if (success) {
+      _navigateToDashboard();
+    } else {
+      setState(() => _errorMessage = "Invalid OTP.");
+    }
+  }
+
+  void _handleGoogleLogin() async {
+    setState(() {
+      _isGoogleLoading = true;
+      _errorMessage = "";
+    });
+    final success = await _authService.loginWithGoogle();
+    setState(() {
+      _isGoogleLoading = false;
+    });
+    if (success) {
+      _navigateToDashboard();
+    } else {
+      setState(() => _errorMessage = "Google login failed.");
+    }
+  }
+
+  Widget _buildOtpBody() {
+    return Column(
+      children: [
+        const Text(
+          "LOGIN WITH OTP",
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 2.0),
+        ),
+        const SizedBox(height: 20),
+        if (!_isOtpSent) ...[
+          TextField(
+            controller: _otpPhoneController,
+            keyboardType: TextInputType.phone,
+            maxLength: 10,
+            style: const TextStyle(color: AppTheme.textWhite, fontSize: 16),
+            decoration: const InputDecoration(
+              hintText: "Enter Mobile Number",
+              prefixIcon: Icon(Icons.phone_android, color: AppTheme.goldAccent),
+              counterText: "",
+            ),
+          ),
+          const SizedBox(height: 20),
+          _isOtpLoading 
+            ? const CircularProgressIndicator(color: AppTheme.goldAccent)
+            : ElevatedButton(
+                onPressed: _handleSendOtp,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text("SEND OTP"),
+              ),
+        ] else ...[
+          Text(
+            "OTP sent to ${_otpPhoneController.text}",
+            style: const TextStyle(color: AppTheme.successGreen, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _otpCodeController,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.textWhite, fontSize: 24, letterSpacing: 8.0, fontWeight: FontWeight.bold),
+            decoration: const InputDecoration(
+              hintText: "000000",
+              counterText: "",
+            ),
+          ),
+          const SizedBox(height: 20),
+          _isOtpLoading 
+            ? const CircularProgressIndicator(color: AppTheme.goldAccent)
+            : ElevatedButton(
+                onPressed: _handleVerifyOtp,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text("VERIFY & LOGIN"),
+              ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () => setState(() { _isOtpSent = false; _otpCodeController.clear(); }),
+            child: const Text("Change Mobile Number", style: TextStyle(color: AppTheme.goldAccent, fontSize: 12)),
+          )
+        ],
+      ],
+    );
+  }
+
+  Widget _buildGoogleLoginButton() {
+    return _isGoogleLoading 
+      ? const Center(child: CircularProgressIndicator(color: Colors.white))
+      : InkWell(
+          onTap: _handleGoogleLogin,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.network(
+                  'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg',
+                  height: 24,
+                  width: 24,
+                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata_rounded, color: Colors.black, size: 36),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  "Continue with Google",
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+
 }

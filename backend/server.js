@@ -180,6 +180,110 @@ app.post('/api/auth/update-profile', async (req, res) => {
   }
 });
 
+// ----------------------------------------
+// SIMULATED OTP & GOOGLE AUTH ENDPOINTS
+// ----------------------------------------
+
+// Request OTP
+app.post('/api/auth/send-otp', async (req, res) => {
+  const { mobile } = req.body;
+  if (!mobile) {
+    return res.status(400).json({ success: false, message: 'Mobile number is required.' });
+  }
+  // Simulate delay for sending OTP
+  setTimeout(() => {
+    return res.json({ success: true, message: 'OTP sent successfully to ' + mobile });
+  }, 1000);
+});
+
+// Verify OTP
+app.post('/api/auth/verify-otp', async (req, res) => {
+  const { mobile, otp } = req.body;
+  if (!mobile || !otp) {
+    return res.status(400).json({ success: false, message: 'Mobile and OTP are required.' });
+  }
+
+  try {
+    // Check if user exists with this mobile
+    let user = await User.findOne({ mobile });
+    let isNewUser = false;
+    
+    // Auto-register if not found (simulating phone auth flow)
+    if (!user) {
+      isNewUser = true;
+      const normalizedEmail = `user${mobile}@example.com`;
+      user = new User({ 
+        email: normalizedEmail, 
+        name: 'OTP User', 
+        pin: '1234', 
+        aadhaar: '000000000000', 
+        mobile 
+      });
+      await user.save();
+      
+      const newWallet = new Wallet({ user_email: normalizedEmail, balance: 5000.00 });
+      await newWallet.save();
+    }
+
+    return res.json({
+      success: true,
+      message: 'OTP verified successfully.',
+      isNewUser,
+      user: {
+        email: user.email,
+        name: user.name,
+        pin: user.pin,
+        aadhaar: user.aadhaar,
+        mobile: user.mobile
+      }
+    });
+  } catch (error) {
+    console.error('OTP verify error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
+});
+
+// Google Login Simulation
+app.post('/api/auth/google-login', async (req, res) => {
+  try {
+    // Since this is a simulation without real OAuth tokens, we'll just auto-login a dummy Google user
+    // In a real app, you would verify the Google idToken here using google-auth-library
+    const normalizedEmail = 'googleuser@gmail.com';
+    let user = await User.findOne({ email: normalizedEmail });
+    let isNewUser = false;
+
+    if (!user) {
+      isNewUser = true;
+      user = new User({ 
+        email: normalizedEmail, 
+        name: 'Google User', 
+        pin: '1234', 
+        aadhaar: '123456789012', 
+        mobile: '9999999999' 
+      });
+      await user.save();
+      
+      const newWallet = new Wallet({ user_email: normalizedEmail, balance: 5000.00 });
+      await newWallet.save();
+    }
+
+    return res.json({
+      success: true,
+      isNewUser,
+      user: {
+        email: user.email,
+        name: user.name,
+        pin: user.pin,
+        aadhaar: user.aadhaar,
+        mobile: user.mobile
+      }
+    });
+  } catch (error) {
+    console.error('Google login error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
+});
+
 // Check if there are any registered users
 app.get('/api/auth/has-users', async (req, res) => {
   try {

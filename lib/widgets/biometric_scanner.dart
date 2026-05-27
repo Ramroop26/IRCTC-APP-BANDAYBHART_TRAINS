@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
 import '../services/auth_service.dart';
 import '../theme.dart';
 
@@ -192,6 +193,10 @@ class _FaceScannerWidgetState extends State<FaceScannerWidget>
   bool _isScanning = false;
   bool _scanSuccess = false;
 
+  // Camera setup
+  CameraController? _cameraController;
+  bool _isCameraInitialized = false;
+
   // Live status ticker log
   String _liveStatusLog = "READY FOR CAMERA FEED";
   double _matchingPercentage = 0.0;
@@ -200,6 +205,7 @@ class _FaceScannerWidgetState extends State<FaceScannerWidget>
   @override
   void initState() {
     super.initState();
+    _initCamera();
     _scannerController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
@@ -238,8 +244,47 @@ class _FaceScannerWidgetState extends State<FaceScannerWidget>
     });
   }
 
+  Future<void> _initCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) return;
+      
+      // Try to find a front facing camera
+      CameraDescription? frontCamera;
+      for (var camera in cameras) {
+        if (camera.lensDirection == CameraLensDirection.front) {
+          frontCamera = camera;
+          break;
+        }
+      }
+      frontCamera ??= cameras.first;
+
+      _cameraController = CameraController(
+        frontCamera,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
+
+      await _cameraController!.initialize();
+      if (mounted) {
+        setState(() {
+          _isCameraInitialized = true;
+          _liveStatusLog = "CAMERA FEED ACTIVE";
+        });
+      }
+    } catch (e) {
+      debugPrint("Camera init error: $e");
+      if (mounted) {
+        setState(() {
+          _liveStatusLog = "CAMERA UNAVAILABLE";
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
+    _cameraController?.dispose();
     _scannerController.dispose();
     _tickerTimer?.cancel();
     super.dispose();
@@ -288,17 +333,33 @@ class _FaceScannerWidgetState extends State<FaceScannerWidget>
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(26),
-                  child: AnimatedBuilder(
-                    animation: _scannerController,
-                    builder: (context, child) {
-                      return CustomPaint(
-                        painter: CameraViewfinderPainter(
-                          progress: _scannerController.value,
-                          isScanning: _isScanning,
-                          isSuccess: _scanSuccess,
-                        ),
-                      );
-                    },
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (_isCameraInitialized && _cameraController != null)
+                        FittedBox(
+                          fit: BoxFit.cover,
+                          child: SizedBox(
+                            width: _cameraController!.value.previewSize?.width ?? 1,
+                            height: _cameraController!.value.previewSize?.height ?? 1,
+                            child: CameraPreview(_cameraController!),
+                          ),
+                        )
+                      else
+                        Container(color: Colors.black87),
+                      AnimatedBuilder(
+                        animation: _scannerController,
+                        builder: (context, child) {
+                          return CustomPaint(
+                            painter: CameraViewfinderPainter(
+                              progress: _scannerController.value,
+                              isScanning: _isScanning,
+                              isSuccess: _scanSuccess,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ),

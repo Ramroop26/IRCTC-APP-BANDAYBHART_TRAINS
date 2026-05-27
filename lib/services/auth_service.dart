@@ -125,7 +125,7 @@ class AuthService extends ChangeNotifier {
     }
     
     // Fallback if server fails but we need a profile
-    _userName = 'Rahul Sharma';
+    _userName = 'Ramroop Prajapati';
     _userPin = '1234';
     _userEmail = 'rahul@example.com';
     _userAadhaar = '123456789012';

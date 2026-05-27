@@ -244,7 +244,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 });
 
 const { OAuth2Client } = require('google-auth-library');
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '122856624000-jljrgs414b3q1mhf8drta7rda9g9o47v.apps.googleusercontent.com';
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // Google Login Verification

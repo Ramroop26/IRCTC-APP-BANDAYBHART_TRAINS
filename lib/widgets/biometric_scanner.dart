@@ -276,7 +276,10 @@ class _FaceScannerWidgetState extends State<FaceScannerWidget>
       debugPrint("Camera init error: $e");
       if (mounted) {
         setState(() {
-          _liveStatusLog = "CAMERA UNAVAILABLE";
+          // Show the exact error on the screen
+          String errorMsg = e.toString();
+          if (errorMsg.length > 25) errorMsg = errorMsg.substring(0, 25) + "..";
+          _liveStatusLog = "ERR: $errorMsg";
         });
       }
     }

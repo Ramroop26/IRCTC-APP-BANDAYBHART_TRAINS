@@ -19,7 +19,7 @@ class AuthService extends ChangeNotifier {
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     clientId: kIsWeb ? '122856624000-jljrgs414b3q1mhf8drta7rda9g9o47v.apps.googleusercontent.com' : null,
     serverClientId: kIsWeb ? '122856624000-jljrgs414b3q1mhf8drta7rda9g9o47v.apps.googleusercontent.com' : null,
-    scopes: ['email', 'profile'],
+    scopes: ['email'],
   );
   
   bool _isLoggedIn = false;

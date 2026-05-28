@@ -612,14 +612,14 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       _isGoogleLoading = true;
       _errorMessage = "";
     });
-    final success = await _authService.loginWithGoogle();
+    final errorMsg = await _authService.loginWithGoogle();
     setState(() {
       _isGoogleLoading = false;
     });
-    if (success) {
+    if (errorMsg == null) {
       _navigateToDashboard();
     } else {
-      setState(() => _errorMessage = "Google login failed.");
+      setState(() => _errorMessage = "Google login failed: $errorMsg");
     }
   }
 

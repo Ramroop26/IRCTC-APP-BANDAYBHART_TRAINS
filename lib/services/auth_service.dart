@@ -357,20 +357,19 @@ class AuthService extends ChangeNotifier {
   }
 
   // Real Google Login
-  Future<bool> loginWithGoogle() async {
+  Future<String?> loginWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
         // User aborted the sign-in
-        return false;
+        return "Sign-in aborted by user or blocked by browser.";
       }
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final idToken = googleAuth.idToken;
 
       if (idToken == null) {
-        debugPrint("Google sign in failed: No ID Token returned");
-        return false;
+        return "Google sign in failed: No ID Token returned";
       }
 
       final res = await http.post(
@@ -394,13 +393,17 @@ class AuthService extends ChangeNotifier {
           WalletService().fetchWalletData();
           BookingService().fetchBookings();
           notifyListeners();
-          return true;
+          return null; // null means success
+        } else {
+          return data['message'] ?? "Backend returned false for success";
         }
+      } else {
+        return "Backend Error ${res.statusCode}: ${res.body}";
       }
     } catch (e) {
       debugPrint("Google login error: $e");
+      return e.toString();
     }
-    return false;
   }
 
   void logout() {

@@ -20,8 +20,14 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   String _errorMessage = "";
 
   // OTP & Google State
-  final _otpPhoneController = TextEditingController();
+  final _otpEmailController = TextEditingController();
   final _otpCodeController = TextEditingController();
+  
+  final _firebasePhoneController = TextEditingController();
+  final _firebaseCodeController = TextEditingController();
+  bool _isFirebaseOtpSent = false;
+  bool _isFirebaseLoading = false;
+  
   bool _isOtpSent = false;
   bool _isGoogleLoading = false;
   bool _isOtpLoading = false;
@@ -48,8 +54,10 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     _regPinController.dispose();
     _regAadhaarController.dispose();
     _regMobileController.dispose();
-    _otpPhoneController.dispose();
+    _otpEmailController.dispose();
     _otpCodeController.dispose();
+    _firebasePhoneController.dispose();
+    _firebaseCodeController.dispose();
     super.dispose();
   }
 
@@ -342,7 +350,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               _buildTabItem(0, "PIN", Icons.lock_outline),
               _buildTabItem(1, "Touch", Icons.fingerprint_rounded),
               _buildTabItem(2, "Face", Icons.face_unlock_rounded),
-              _buildTabItem(3, "OTP", Icons.message_rounded),
+              _buildTabItem(3, "Email OTP", Icons.email_outlined),
+              _buildTabItem(4, "SMS OTP", Icons.sms_outlined),
             ],
           ),
         ),
@@ -562,41 +571,47 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         );
       case 3:
         return _buildOtpBody();
+      case 4:
+        return _buildFirebaseOtpBody();
       default:
         return const SizedBox.shrink();
     }
   }
 
   void _handleSendOtp() async {
-    if (_otpPhoneController.text.length != 10) {
-      setState(() => _errorMessage = "Enter valid 10-digit mobile number.");
+    if (!_otpEmailController.text.contains('@')) {
+      setState(() => _errorMessage = "Enter valid email address");
       return;
     }
     setState(() {
       _isOtpLoading = true;
       _errorMessage = "";
     });
-    final success = await _authService.requestOTP(_otpPhoneController.text);
+    final success = await _authService.requestEmailOTP(_otpEmailController.text.trim());
     setState(() {
       _isOtpLoading = false;
-      if (success) {
-        _isOtpSent = true;
-      } else {
-        _errorMessage = "Failed to send OTP.";
-      }
     });
+    if (success) {
+      setState(() {
+        _isOtpSent = true;
+      });
+    } else {
+      setState(() {
+        _errorMessage = "Failed to send Email OTP.";
+      });
+    }
   }
 
   void _handleVerifyOtp() async {
-    if (_otpCodeController.text.length < 4) {
-      setState(() => _errorMessage = "Enter valid OTP.");
+    if (_otpCodeController.text.length < 6) {
+      setState(() => _errorMessage = "Enter valid 6-digit OTP.");
       return;
     }
     setState(() {
       _isOtpLoading = true;
       _errorMessage = "";
     });
-    final success = await _authService.verifyOTP(_otpPhoneController.text, _otpCodeController.text);
+    final success = await _authService.verifyEmailOTP(_otpEmailController.text.trim(), _otpCodeController.text.trim());
     setState(() {
       _isOtpLoading = false;
     });
@@ -604,6 +619,50 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       _navigateToDashboard();
     } else {
       setState(() => _errorMessage = "Invalid OTP.");
+    }
+  }
+
+  void _handleSendFirebaseOtp() async {
+    if (_firebasePhoneController.text.length != 10) {
+      setState(() => _errorMessage = "Enter valid 10-digit mobile number");
+      return;
+    }
+    setState(() {
+      _isFirebaseLoading = true;
+      _errorMessage = "";
+    });
+    final success = await _authService.requestFirebaseOTP(_firebasePhoneController.text.trim());
+    setState(() {
+      _isFirebaseLoading = false;
+    });
+    if (success) {
+      setState(() {
+        _isFirebaseOtpSent = true;
+      });
+    } else {
+      setState(() {
+        _errorMessage = "Failed to send SMS OTP.";
+      });
+    }
+  }
+
+  void _handleVerifyFirebaseOtp() async {
+    if (_firebaseCodeController.text.length < 6) {
+      setState(() => _errorMessage = "Enter valid 6-digit OTP.");
+      return;
+    }
+    setState(() {
+      _isFirebaseLoading = true;
+      _errorMessage = "";
+    });
+    final success = await _authService.verifyFirebaseOTP(_firebaseCodeController.text.trim());
+    setState(() {
+      _isFirebaseLoading = false;
+    });
+    if (success) {
+      _navigateToDashboard();
+    } else {
+      setState(() => _errorMessage = "Invalid SMS OTP.");
     }
   }
 
@@ -633,13 +692,12 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         const SizedBox(height: 20),
         if (!_isOtpSent) ...[
           TextField(
-            controller: _otpPhoneController,
-            keyboardType: TextInputType.phone,
-            maxLength: 10,
+            controller: _otpEmailController,
+            keyboardType: TextInputType.emailAddress,
             style: const TextStyle(color: AppTheme.textWhite, fontSize: 16),
             decoration: const InputDecoration(
-              hintText: "Enter Mobile Number",
-              prefixIcon: Icon(Icons.phone_android, color: AppTheme.goldAccent),
+              hintText: "Enter Email Address",
+              prefixIcon: Icon(Icons.email_outlined, color: AppTheme.goldAccent),
               counterText: "",
             ),
           ),
@@ -655,7 +713,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               ),
         ] else ...[
           Text(
-            "OTP sent to ${_otpPhoneController.text}",
+            "OTP sent to ${_otpEmailController.text}",
             style: const TextStyle(color: AppTheme.successGreen, fontSize: 12),
           ),
           const SizedBox(height: 16),
@@ -683,6 +741,73 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           const SizedBox(height: 12),
           TextButton(
             onPressed: () => setState(() { _isOtpSent = false; _otpCodeController.clear(); }),
+            child: const Text("Change Mobile Number", style: TextStyle(color: AppTheme.goldAccent, fontSize: 12)),
+          )
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFirebaseOtpBody() {
+    return Column(
+      children: [
+        const Text(
+          "LOGIN WITH SMS OTP",
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 2.0),
+        ),
+        const SizedBox(height: 20),
+        if (!_isFirebaseOtpSent) ...[
+          TextField(
+            controller: _firebasePhoneController,
+            keyboardType: TextInputType.phone,
+            maxLength: 10,
+            style: const TextStyle(color: AppTheme.textWhite, fontSize: 16),
+            decoration: const InputDecoration(
+              hintText: "Enter Mobile Number",
+              prefixIcon: Icon(Icons.phone_android, color: AppTheme.goldAccent),
+              counterText: "",
+            ),
+          ),
+          const SizedBox(height: 20),
+          _isFirebaseLoading 
+            ? const CircularProgressIndicator(color: AppTheme.goldAccent)
+            : ElevatedButton(
+                onPressed: _handleSendFirebaseOtp,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text("SEND SMS OTP"),
+              ),
+        ] else ...[
+          Text(
+            "SMS sent to ${_firebasePhoneController.text}",
+            style: const TextStyle(color: AppTheme.successGreen, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _firebaseCodeController,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.textWhite, fontSize: 24, letterSpacing: 8.0, fontWeight: FontWeight.bold),
+            decoration: const InputDecoration(
+              hintText: "000000",
+              counterText: "",
+            ),
+          ),
+          const SizedBox(height: 20),
+          _isFirebaseLoading 
+            ? const CircularProgressIndicator(color: AppTheme.goldAccent)
+            : ElevatedButton(
+                onPressed: _handleVerifyFirebaseOtp,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text("VERIFY & LOGIN"),
+              ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () => setState(() { _isFirebaseOtpSent = false; _firebaseCodeController.clear(); }),
             child: const Text("Change Mobile Number", style: TextStyle(color: AppTheme.goldAccent, fontSize: 12)),
           )
         ],
@@ -731,7 +856,5 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             ),
           ),
         );
-
-}
-
+  }
 }

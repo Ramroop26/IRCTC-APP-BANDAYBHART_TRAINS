@@ -14,8 +14,25 @@ import 'screens/architecture_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/notification_screen.dart';
 import 'screens/chatbot_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyB1cOCL8ViAlBLSq0kpz-f2ibgGZ-F4IUU",
+        authDomain: "irctc-app-497420.firebaseapp.com",
+        projectId: "irctc-app-497420",
+        storageBucket: "irctc-app-497420.firebasestorage.app",
+        messagingSenderId: "122856624000",
+        appId: "1:122856624000:web:78225ef81dbfcc76493b65",
+        measurementId: "G-TF0RWTB25W",
+      ),
+    );
+  } catch (e) {
+    debugPrint("Firebase init error: $e");
+  }
   runApp(const IRCTCApp());
 }
 

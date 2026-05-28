@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'api_config.dart';
 import 'wallet_service.dart';
 import 'booking_service.dart';
@@ -30,6 +31,8 @@ class AuthService extends ChangeNotifier {
   String _userEmail = '';
   String _userAadhaar = '';
   String _userMobile = '';
+  
+  ConfirmationResult? _confirmationResult;
   final bool _isBiometricEnabled = false;
 
   bool _hasRegisteredUsers = false;
@@ -303,32 +306,32 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // Request OTP
-  Future<bool> requestOTP(String mobile) async {
+  // Request Email OTP
+  Future<bool> requestEmailOTP(String email) async {
     try {
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/send-otp'),
+        Uri.parse('${ApiConfig.baseUrl}/api/auth/send-email-otp'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'mobile': mobile}),
+        body: jsonEncode({'email': email}),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return data['success'] == true;
       }
     } catch (e) {
-      debugPrint("OTP request error: $e");
+      debugPrint("Email OTP request error: $e");
     }
     return false;
   }
 
-  // Verify OTP
-  Future<bool> verifyOTP(String mobile, String otp) async {
+  // Verify Email OTP
+  Future<bool> verifyEmailOTP(String email, String otp) async {
     try {
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/verify-otp'),
+        Uri.parse('${ApiConfig.baseUrl}/api/auth/verify-email-otp'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'mobile': mobile,
+          'email': email,
           'otp': otp,
         }),
       );
@@ -353,6 +356,61 @@ class AuthService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint("OTP verify error: $e");
+    }
+    return false;
+  }
+
+  // Firebase Request OTP (SMS)
+  Future<bool> requestFirebaseOTP(String mobile) async {
+    try {
+      String phoneNumber = mobile;
+      if (!mobile.startsWith('+')) {
+        phoneNumber = '+91$mobile'; // Default to India if no code
+      }
+      _confirmationResult = await FirebaseAuth.instance.signInWithPhoneNumber(phoneNumber);
+      return true;
+    } catch (e) {
+      debugPrint("Firebase OTP request error: $e");
+    }
+    return false;
+  }
+
+  // Firebase Verify OTP
+  Future<bool> verifyFirebaseOTP(String otp) async {
+    if (_confirmationResult == null) return false;
+    try {
+      UserCredential userCredential = await _confirmationResult!.confirm(otp);
+      if (userCredential.user != null) {
+        // Sync with backend using the phone number
+        final mobile = userCredential.user!.phoneNumber?.replaceAll('+91', '') ?? '';
+        final res = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/api/auth/verify-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'mobile': mobile,
+            'otp': 'firebase', // the backend verify-otp creates the user if doesn't exist
+          }),
+        );
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          if (data['success'] == true) {
+            final user = data['user'];
+            _userName = user['name'];
+            _userPin = user['pin'];
+            _userEmail = user['email'];
+            _userAadhaar = user['aadhaar'];
+            _userMobile = user['mobile'];
+            _isLoggedIn = true;
+            _hasRegisteredUsers = true;
+            WalletService().fetchWalletData();
+            BookingService().fetchBookings();
+            notifyListeners();
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Firebase OTP verify error: $e");
     }
     return false;
   }

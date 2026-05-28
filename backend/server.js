@@ -184,6 +184,130 @@ app.post('/api/auth/update-profile', async (req, res) => {
 // SIMULATED OTP & GOOGLE AUTH ENDPOINTS
 // ----------------------------------------
 
+const nodemailer = require('nodemailer');
+
+// Temporary in-memory store for OTPs (in production use Redis or MongoDB)
+const otpStore = new Map();
+
+// Setup Nodemailer transporter
+// We use a predefined test account or environment variables
+let transporter;
+nodemailer.createTestAccount((err, account) => {
+  if (err) {
+    console.error('Failed to create a testing account. ' + err.message);
+    return;
+  }
+  transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || account.smtp.host,
+    port: process.env.EMAIL_PORT || account.smtp.port,
+    secure: process.env.EMAIL_SECURE === 'true' || account.smtp.secure,
+    auth: {
+      user: process.env.EMAIL_USER || account.user,
+      pass: process.env.EMAIL_PASS || account.pass
+    }
+  });
+  console.log('Nodemailer test account created. Configure EMAIL_USER and EMAIL_PASS in .env for real emails.');
+});
+
+// Request Email OTP
+app.post('/api/auth/send-email-otp', async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ success: false, message: 'Email address is required.' });
+  }
+
+  // Generate a 6 digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  otpStore.set(email.toLowerCase().trim(), { otp, expiresAt: Date.now() + 10 * 60 * 1000 }); // 10 mins expiry
+
+  try {
+    if (!transporter) throw new Error('Mail transporter not initialized');
+
+    const info = await transporter.sendMail({
+      from: '"IRCTC Secure Login" <no-reply@irctcapp.com>',
+      to: email,
+      subject: 'Your Login OTP',
+      text: `Your OTP for login is: ${otp}. It is valid for 10 minutes.`,
+      html: `<b>Your OTP for login is: <span style="font-size: 24px;">${otp}</span></b><br>It is valid for 10 minutes.`
+    });
+
+    console.log('Message sent: %s', info.messageId);
+    console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+    
+    // In demo mode, we can log it so we can see it if email is fake
+    console.log(`[DEMO OTP] Generated OTP for ${email} is ${otp}`);
+
+    return res.json({ success: true, message: 'OTP sent successfully to ' + email });
+  } catch (err) {
+    console.error('Error sending OTP email:', err);
+    return res.status(500).json({ success: false, message: 'Failed to send OTP email.' });
+  }
+});
+
+// Verify Email OTP
+app.post('/api/auth/verify-email-otp', async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({ success: false, message: 'Email and OTP are required.' });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const storedOtpData = otpStore.get(normalizedEmail);
+
+  if (!storedOtpData) {
+    return res.status(400).json({ success: false, message: 'OTP not requested or expired.' });
+  }
+
+  if (Date.now() > storedOtpData.expiresAt) {
+    otpStore.delete(normalizedEmail);
+    return res.status(400).json({ success: false, message: 'OTP has expired.' });
+  }
+
+  if (storedOtpData.otp !== otp) {
+    return res.status(400).json({ success: false, message: 'Invalid OTP.' });
+  }
+
+  // OTP is correct
+  otpStore.delete(normalizedEmail);
+
+  try {
+    // Check if user exists
+    let user = await User.findOne({ email: normalizedEmail });
+    let isNewUser = false;
+    
+    if (!user) {
+      isNewUser = true;
+      user = new User({ 
+        email: normalizedEmail, 
+        name: 'Email User', 
+        pin: '1234', 
+        aadhaar: '000000000000', 
+        mobile: '0000000000' 
+      });
+      await user.save();
+      
+      const newWallet = new Wallet({ user_email: normalizedEmail, balance: 5000.00 });
+      await newWallet.save();
+    }
+
+    return res.json({
+      success: true,
+      message: 'OTP verified successfully.',
+      isNewUser,
+      user: {
+        email: user.email,
+        name: user.name,
+        pin: user.pin,
+        aadhaar: user.aadhaar,
+        mobile: user.mobile
+      }
+    });
+  } catch (error) {
+    console.error('OTP verify error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
+});
+
 // Request OTP
 app.post('/api/auth/send-otp', async (req, res) => {
   const { mobile } = req.body;

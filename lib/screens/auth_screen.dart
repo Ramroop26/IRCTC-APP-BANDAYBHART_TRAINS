@@ -739,9 +739,18 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                 child: const Text("VERIFY & LOGIN"),
               ),
           const SizedBox(height: 12),
-          TextButton(
-            onPressed: () => setState(() { _isOtpSent = false; _otpCodeController.clear(); }),
-            child: const Text("Change Mobile Number", style: TextStyle(color: AppTheme.goldAccent, fontSize: 12)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              TextButton(
+                onPressed: _handleSendOtp,
+                child: const Text("Resend OTP", style: TextStyle(color: AppTheme.goldAccent, fontSize: 12)),
+              ),
+              TextButton(
+                onPressed: () => setState(() { _isOtpSent = false; _otpCodeController.clear(); }),
+                child: const Text("Change Email", style: TextStyle(color: AppTheme.goldAccent, fontSize: 12)),
+              ),
+            ],
           )
         ],
       ],
@@ -806,9 +815,18 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                 child: const Text("VERIFY & LOGIN"),
               ),
           const SizedBox(height: 12),
-          TextButton(
-            onPressed: () => setState(() { _isFirebaseOtpSent = false; _firebaseCodeController.clear(); }),
-            child: const Text("Change Mobile Number", style: TextStyle(color: AppTheme.goldAccent, fontSize: 12)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              TextButton(
+                onPressed: _handleSendFirebaseOtp,
+                child: const Text("Resend OTP", style: TextStyle(color: AppTheme.goldAccent, fontSize: 12)),
+              ),
+              TextButton(
+                onPressed: () => setState(() { _isFirebaseOtpSent = false; _firebaseCodeController.clear(); }),
+                child: const Text("Change Number", style: TextStyle(color: AppTheme.goldAccent, fontSize: 12)),
+              ),
+            ],
           )
         ],
       ],

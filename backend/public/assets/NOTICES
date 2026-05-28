@@ -5163,6 +5163,12 @@ SOFTWARE.
 
 --------------------------------------------------------------------------------
 flutter_lints
+google_identity_services_web
+google_sign_in
+google_sign_in_android
+google_sign_in_ios
+google_sign_in_platform_interface
+google_sign_in_web
 local_auth
 local_auth_darwin
 local_auth_windows

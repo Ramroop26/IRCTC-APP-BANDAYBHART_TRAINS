@@ -17,6 +17,7 @@ class AuthService extends ChangeNotifier {
 
   final LocalAuthentication _localAuth = LocalAuthentication();
   final GoogleSignIn _googleSignIn = GoogleSignIn(
+    clientId: kIsWeb ? '122856624000-jljrgs414b3q1mhf8drta7rda9g9o47v.apps.googleusercontent.com' : null,
     scopes: ['email', 'profile'],
   );
   
@@ -358,13 +359,13 @@ class AuthService extends ChangeNotifier {
   // Real Google Login
   Future<bool> loginWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.authenticate();
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
         // User aborted the sign-in
         return false;
       }
 
-      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final idToken = googleAuth.idToken;
 
       if (idToken == null) {

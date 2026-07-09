@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
+
 class ApiConfig {
-  // Use your computer's local IP address so the phone can connect when on the same Wi-Fi network.
-  // Change to 'http://localhost:3000' if testing on web/emulator locally.
-  static const String baseUrl = 'https://irctc-app-bandaybhart-trains-220605132311.europe-west1.run.app';
+  // Use relative path for web so that it dynamically fits the host,
+  // and fallback to localhost:3000 for mobile/desktop/emulator.
+  static const String baseUrl = kIsWeb ? '' : 'http://localhost:3000';
 }

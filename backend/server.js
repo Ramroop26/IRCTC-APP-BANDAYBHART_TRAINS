@@ -764,10 +764,11 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Start server after database and Kafka initialization
+// Start server immediately to satisfy Cloud Run port binding checks, and initialize connections in the background
 const PORT = process.env.PORT || 3000;
-Promise.all([db.initializeDatabase(), initKafka()]).then(() => {
-  app.listen(PORT, () => {
-    console.log(`IRCTC Backend Server listening on port ${PORT}`);
-  });
+app.listen(PORT, () => {
+  console.log(`IRCTC Backend Server listening on port ${PORT}`);
+  db.initializeDatabase().catch(err => console.error('Database connection error:', err));
+  initKafka().catch(err => console.error('Kafka initialization error:', err));
 });
+

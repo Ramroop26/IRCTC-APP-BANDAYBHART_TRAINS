@@ -158,6 +158,32 @@ class _TrainSearchScreenState extends State<TrainSearchScreen>
         });
       }
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+        if (args != null) {
+          setState(() {
+            if (args['from'] != null) _fromCtrl.text = args['from'];
+            if (args['to'] != null) _toCtrl.text = args['to'];
+            if (args['date'] != null) {
+              _journeyDate = args['date'] is DateTime ? args['date'] : DateTime.parse(args['date'].toString());
+            }
+            if (args['class'] != null) {
+              _selectedClasses.clear();
+              final matchedEntry = kClassNames.entries.firstWhere(
+                (entry) => entry.value.toLowerCase().contains(args['class'].toString().toLowerCase()) || entry.key.toLowerCase() == args['class'].toString().toLowerCase(),
+                orElse: () => const MapEntry('', ''),
+              );
+              if (matchedEntry.key.isNotEmpty) {
+                _selectedClasses.add(matchedEntry.key);
+              }
+            }
+          });
+          _performStationSearch();
+        }
+      }
+    });
   }
 
   @override

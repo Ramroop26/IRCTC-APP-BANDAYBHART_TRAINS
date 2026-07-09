@@ -168,6 +168,22 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     }
   }
 
+  void _quickDemoLogin() async {
+    if (!_authService.hasRegisteredUsers) {
+      await _authService.registerUser(
+        "Vande Bharat Tester",
+        "demo@bandaybhart.com",
+        "1234",
+        "223344556677",
+        "9876543210",
+      );
+    }
+    final success = await _authService.authenticatePin("1234");
+    if (success) {
+      _navigateToDashboard();
+    }
+  }
+
   void _navigateToDashboard() {
     Navigator.pushReplacementNamed(context, '/dashboard');
   }
@@ -182,153 +198,203 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             end: Alignment.bottomCenter,
             colors: [
               AppTheme.primaryDarkNavy,
-              AppTheme.primaryNavy,
               AppTheme.backgroundDark,
             ],
           ),
         ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // IRCTC Logo & Train Brand
-                  Hero(
-                    tag: 'app_logo',
-                    child: Image.asset(
-                      'assets/logo.png',
-                      width: 90,
-                      height: 90,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    "IRCTC NEXT-GEN",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 2.0,
-                      color: AppTheme.textWhite,
-                      shadows: [
-                        Shadow(
-                          color: AppTheme.goldAccent.withOpacity(0.5),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    "Search. Book. Travel. Simplified.",
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.goldAccent.withOpacity(0.8),
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Glassmorphic Panel
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: AppTheme.cardNavy.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: AppTheme.goldAccent.withOpacity(0.15),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 20,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        // Register/Login Header Text
-                        Text(
-                          _isRegistering ? "CREATE NEW ACCOUNT" : "SECURE USER LOGIN",
-                          style: const TextStyle(
-                            color: AppTheme.goldAccent,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Form body
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 400),
-                          switchInCurve: Curves.easeOutQuad,
-                          switchOutCurve: Curves.easeInQuad,
-                          transitionBuilder: (Widget child, Animation<double> animation) {
-                            final inAnimation = Tween<Offset>(
-                              begin: const Offset(0.3, 0.0),
-                              end: Offset.zero,
-                            ).animate(animation);
-                            final outAnimation = Tween<Offset>(
-                              begin: const Offset(-0.3, 0.0),
-                              end: Offset.zero,
-                            ).animate(animation);
-                            return SlideTransition(
-                              position: child.key == const ValueKey("register_form") 
-                                  ? inAnimation 
-                                  : outAnimation,
-                              child: FadeTransition(
-                                opacity: animation,
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: _isRegistering ? _buildRegisterForm() : _buildLoginForm(),
-                        ),
-
-                        if (_errorMessage.isNotEmpty && !_isRegistering && _selectedTab == 0) ...[
-                          const SizedBox(height: 16),
-                          Text(
-                            _errorMessage,
-                            style: const TextStyle(color: AppTheme.errorRed, fontSize: 13),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Toggle Login/Register footer button
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _isRegistering = !_isRegistering;
-                        _errorMessage = "";
-                      });
-                    },
-                    child: Text(
-                      _isRegistering 
-                          ? "ALREADY HAVE AN ACCOUNT? LOGIN" 
-                          : "NEW TO IRCTC? CREATE AN ACCOUNT",
-                      style: const TextStyle(
-                        color: AppTheme.goldAccent,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox.shrink(),
-                ],
+        child: Stack(
+          children: [
+            // Gold Vector Lines Background
+            Positioned.fill(
+              child: CustomPaint(
+                painter: GoldLinePainter(),
               ),
             ),
-          ),
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 20),
+                      // Mockup-integrated circular icon + Logo
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.goldAccent.withOpacity(0.12),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppTheme.goldAccent.withOpacity(0.4), width: 1.5),
+                        ),
+                        child: Image.asset(
+                          'assets/logo.png',
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => const Icon(
+                            Icons.directions_railway_filled_rounded,
+                            color: AppTheme.goldAccent,
+                            size: 40,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        "VANDE BHARAT",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2.0,
+                          color: AppTheme.goldAccent,
+                          shadows: [
+                            Shadow(
+                              color: AppTheme.goldAccent.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Text(
+                        "Search. Book. Travel. Simplified.",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textMuted,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+    
+                      // Glassmorphic Panel
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: AppTheme.cardNavy.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: AppTheme.goldAccent.withOpacity(0.15),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 20,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            // Register/Login Header Text
+                            Text(
+                              _isRegistering ? "CREATE NEW ACCOUNT" : "SECURE USER LOGIN",
+                              style: const TextStyle(
+                                color: AppTheme.goldAccent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+    
+                            // Form body
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 400),
+                              switchInCurve: Curves.easeOutQuad,
+                              switchOutCurve: Curves.easeInQuad,
+                              transitionBuilder: (Widget child, Animation<double> animation) {
+                                final inAnimation = Tween<Offset>(
+                                  begin: const Offset(0.3, 0.0),
+                                  end: Offset.zero,
+                                ).animate(animation);
+                                final outAnimation = Tween<Offset>(
+                                  begin: const Offset(-0.3, 0.0),
+                                  end: Offset.zero,
+                                ).animate(animation);
+                                return SlideTransition(
+                                  position: child.key == const ValueKey("register_form") 
+                                      ? inAnimation 
+                                      : outAnimation,
+                                  child: FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  ),
+                                );
+                              },
+                              child: _isRegistering ? _buildRegisterForm() : _buildLoginForm(),
+                            ),
+    
+                            if (_errorMessage.isNotEmpty && !_isRegistering && _selectedTab == 0) ...[
+                              const SizedBox(height: 16),
+                              Text(
+                                _errorMessage,
+                                style: const TextStyle(color: AppTheme.errorRed, fontSize: 13),
+                              ),
+                            ],
+
+                            // QUICK DEMO ACCOUNT LOGIN BUTTON
+                            const SizedBox(height: 16),
+                            const Divider(color: AppTheme.primaryLightNavy),
+                            const SizedBox(height: 12),
+                            GestureDetector(
+                              onTap: _quickDemoLogin,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.goldAccent.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppTheme.goldAccent.withOpacity(0.4), width: 1),
+                                ),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.flash_on_rounded, color: AppTheme.goldAccent, size: 18),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      "QUICK DEMO ACC LOGIN",
+                                      style: TextStyle(
+                                        color: AppTheme.goldAccent,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.0,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+    
+                      // Toggle Login/Register footer button
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _isRegistering = !_isRegistering;
+                            _errorMessage = "";
+                          });
+                        },
+                        child: Text(
+                          _isRegistering 
+                              ? "ALREADY HAVE AN ACCOUNT? LOGIN" 
+                              : "NEW TO IRCTC? CREATE AN ACCOUNT",
+                          style: const TextStyle(
+                            color: AppTheme.goldAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -876,3 +942,35 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         );
   }
 }
+
+class GoldLinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppTheme.goldAccent.withOpacity(0.04)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final path1 = Path();
+    path1.moveTo(0, size.height * 0.15);
+    path1.cubicTo(
+      size.width * 0.3, size.height * 0.05,
+      size.width * 0.6, size.height * 0.3,
+      size.width, size.height * 0.1,
+    );
+    canvas.drawPath(path1, paint);
+
+    final path2 = Path();
+    path2.moveTo(0, size.height * 0.85);
+    path2.cubicTo(
+      size.width * 0.4, size.height * 0.95,
+      size.width * 0.7, size.height * 0.75,
+      size.width, size.height * 0.9,
+    );
+    canvas.drawPath(path2, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+

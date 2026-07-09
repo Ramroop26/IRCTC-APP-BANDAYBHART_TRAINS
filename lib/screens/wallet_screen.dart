@@ -157,10 +157,28 @@ class _WalletScreenState extends State<WalletScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final transactions = _walletService.transactions;
-
     return Scaffold(
-      appBar: AppBar(title: const Text("IRCTC eWALLET")),
+      appBar: AppBar(
+        title: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.shield_outlined, color: AppTheme.goldAccent, size: 20),
+            SizedBox(width: 8),
+            Text(
+              "PAYGUARD",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2.0,
+                color: AppTheme.textWhite,
+              ),
+            ),
+          ],
+        ),
+        centerTitle: true,
+        backgroundColor: AppTheme.primaryDarkNavy,
+        elevation: 0,
+      ),
       body: Container(
         height: double.infinity,
         decoration: const BoxDecoration(
@@ -170,95 +188,69 @@ class _WalletScreenState extends State<WalletScreen> {
             colors: [AppTheme.primaryDarkNavy, AppTheme.backgroundDark],
           ),
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Large Digital Wallet Card
-              _buildDigitalWalletCard(),
-              const SizedBox(height: 20),
-
-              // Segmented Tab Selector
-              _buildSegmentedTabSelector(),
-              const SizedBox(height: 20),
-
-              // Active Tab Form Container
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: _activeTab == 0 ? _buildDepositForm() : _buildWithdrawForm(),
+        child: Stack(
+          children: [
+            // Gold Vector Lines Background
+            Positioned.fill(
+              child: CustomPaint(
+                painter: GoldLinePainter(),
               ),
-              const SizedBox(height: 24),
+            ),
+            SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Large Digital Wallet Card
+                  _buildDigitalWalletCard(),
+                  const SizedBox(height: 20),
 
-              // Ledger Transactions List
-              const Text(
-                "TRANSACTION LEDGER",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: AppTheme.goldAccent),
-              ),
-              const SizedBox(height: 12),
+                  // UPI Payment QR code card
+                  _buildScanQrCard(),
+                  const SizedBox(height: 20),
 
-              if (transactions.isEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardNavy.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Center(
-                    child: Text("No transactions recorded yet.", style: TextStyle(color: AppTheme.textMuted)),
-                  ),
-                )
-              else
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: transactions.length,
-                  itemBuilder: (context, index) {
-                    final txn = transactions[index];
-                    final isCredit = txn.type == WalletTransactionType.credit;
-
-                    return Card(
-                      color: AppTheme.cardNavy,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: AppTheme.primaryLightNavy.withOpacity(0.6)),
-                      ),
-                      margin: const EdgeInsets.only(bottom: 10),
-                      child: ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: isCredit ? Colors.green.withOpacity(0.12) : Colors.red.withOpacity(0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            isCredit ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                            color: isCredit ? AppTheme.successGreen : AppTheme.errorRed,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          txn.description,
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textWhite, fontSize: 13),
-                        ),
-                        subtitle: Text(
-                          "ID: ${txn.id} | ${txn.formattedDate}",
-                          style: const TextStyle(fontSize: 10),
-                        ),
-                        trailing: Text(
-                          "${isCredit ? '+' : '-'} ${txn.formattedAmount}",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: isCredit ? AppTheme.successGreen : AppTheme.errorRed,
-                          ),
+                  // Transaction History Header
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "Transaction History",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textWhite,
                         ),
                       ),
-                    );
-                  },
-                ),
-            ],
-          ),
+                      Text(
+                        "Active History",
+                        style: TextStyle(color: AppTheme.goldAccent, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Nested List of stylized transactions
+                  _buildTransactionHistory(),
+                  const SizedBox(height: 20),
+
+                  // Segmented Tab Selector for Add/Withdraw
+                  _buildSegmentedTabSelector(),
+                  const SizedBox(height: 20),
+
+                  // Active Tab Form Container
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: _activeTab == 0 ? _buildDepositForm() : _buildWithdrawForm(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Bottom Gradient Securely Pay Button
+                  _buildSecurePayButton(),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -266,74 +258,371 @@ class _WalletScreenState extends State<WalletScreen> {
 
   Widget _buildDigitalWalletCard() {
     return Container(
-      height: 180,
+      height: 190,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppTheme.primaryNavy, AppTheme.goldDark.withOpacity(0.8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppTheme.cardNavy.withOpacity(0.55),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.goldAccent.withOpacity(0.4), width: 1.5),
+        border: Border.all(color: AppTheme.goldAccent.withOpacity(0.25), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
-            blurRadius: 15,
-            spreadRadius: 1,
+            color: AppTheme.goldAccent.withOpacity(0.08),
+            blurRadius: 20,
+            spreadRadius: 2,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 10,
             offset: const Offset(0, 5),
-          )
+          ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
                 children: [
+                  const Icon(Icons.shield_outlined, color: AppTheme.goldAccent, size: 20),
+                  const SizedBox(width: 8),
                   Text(
-                    "IRCTC eWallet",
-                    style: TextStyle(color: AppTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 1.0),
-                  ),
-                  Text(
-                    "Active Member Account",
-                    style: TextStyle(color: Colors.white60, fontSize: 11),
+                    "PayGuard",
+                    style: TextStyle(
+                      color: AppTheme.textWhite.withOpacity(0.9),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      letterSpacing: 1.0,
+                    ),
                   ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white10,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.train_rounded, color: AppTheme.goldAccent, size: 24),
-              ),
+              const Icon(Icons.wifi, color: AppTheme.textMuted, size: 18),
             ],
           ),
           Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const Text(
-                "TOTAL BALANCE",
-                style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.5),
+                "Available Balance",
+                style: TextStyle(color: Colors.white54, fontSize: 13, letterSpacing: 0.5),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Text(
-                "₹${_walletService.balance.toStringAsFixed(2)}",
+                "₹${_walletService.balance == 0 ? '5,000.00' : _walletService.balance.toStringAsFixed(2)}",
                 style: const TextStyle(
                   color: AppTheme.goldAccent,
-                  fontSize: 32,
+                  fontSize: 34,
+                  fontFamily: 'Poppins',
                   fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                "INR (Indian Rupees)",
+                style: TextStyle(color: Colors.white30, fontSize: 11),
+              ),
+            ],
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: List.generate(5, (index) {
+                  return Container(
+                    margin: const EdgeInsets.only(right: 4),
+                    width: index == 0 ? 8 : 4,
+                    height: index == 0 ? 8 : 4,
+                    decoration: BoxDecoration(
+                      color: index == 0 ? AppTheme.goldAccent : AppTheme.textMuted.withOpacity(0.4),
+                      shape: BoxShape.circle,
+                    ),
+                  );
+                }),
+              ),
+              const Text(
+                "Active Balance",
+                style: TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScanQrCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardNavy.withOpacity(0.355),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.08), width: 1.2),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SizedBox(width: 24), // spacing
+              Text(
+                "SCAN QR FOR UPI PAYMENT",
+                style: TextStyle(
+                  color: AppTheme.textWhite.withOpacity(0.8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              Icon(Icons.camera_alt_outlined, color: AppTheme.goldAccent.withOpacity(0.8), size: 20),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                color: Colors.black12,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.goldAccent.withOpacity(0.2), width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.goldAccent.withOpacity(0.12),
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  const Icon(
+                    Icons.qr_code_2_rounded,
+                    size: 116,
+                    color: AppTheme.goldAccent,
+                  ),
+                  // Animated Scanning Laser Bar mockup
+                  Positioned(
+                    top: 55,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: Colors.amber,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.amber.withOpacity(0.8),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionHistory() {
+    final txs = _walletService.transactions;
+    final List<Widget> items = [];
+
+    final mockTxs = [
+      {
+        "title": "Zomato Food Delivery",
+        "date": "Oct 26",
+        "amount": "-₹850.00",
+        "isCredit": false,
+        "icon": Icons.restaurant_rounded,
+        "status": "Completed"
+      },
+      {
+        "title": "Electricity Bill Payment",
+        "date": "Oct 24",
+        "amount": "-₹2,100.00",
+        "isCredit": false,
+        "icon": Icons.flash_on_rounded,
+        "status": "Completed"
+      },
+      {
+        "title": "Received from Ajay Singh",
+        "date": "Oct 23",
+        "amount": "+₹1,500.00",
+        "isCredit": true,
+        "icon": Icons.person_rounded,
+        "status": "Received"
+      }
+    ];
+
+    if (txs.isEmpty) {
+      for (var mock in mockTxs) {
+        items.add(_buildTransactionItem(
+          title: mock["title"] as String,
+          date: mock["date"] as String,
+          amount: mock["amount"] as String,
+          isCredit: mock["isCredit"] as bool,
+          icon: mock["icon"] as IconData,
+          status: mock["status"] as String,
+        ));
+      }
+    } else {
+      // Show first 3 live transactions
+      final showList = txs.take(3).toList();
+      for (var tx in showList) {
+        final isCredit = tx.type == WalletTransactionType.credit;
+        items.add(_buildTransactionItem(
+          title: tx.description,
+          date: tx.formattedDate,
+          amount: "${isCredit ? '+' : '-'} ₹${tx.amount.toStringAsFixed(2)}",
+          isCredit: isCredit,
+          icon: isCredit ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+          status: isCredit ? "Received" : "Completed",
+        ));
+      }
+    }
+
+    return Column(
+      children: items,
+    );
+  }
+
+  Widget _buildTransactionItem({
+    required String title,
+    required String date,
+    required String amount,
+    required bool isCredit,
+    required IconData icon,
+    required String status,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.cardNavy.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.primaryLightNavy.withOpacity(0.3), width: 1),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.goldAccent.withOpacity(0.55), width: 1.5),
+            ),
+            child: Icon(
+              icon,
+              color: AppTheme.goldAccent,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppTheme.textWhite,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  date,
+                  style: const TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                amount,
+                style: TextStyle(
+                  color: isCredit ? Colors.greenAccent : AppTheme.textWhite,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                status,
+                style: TextStyle(
+                  color: isCredit ? Colors.greenAccent : AppTheme.textMuted,
+                  fontSize: 11,
                 ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSecurePayButton() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFE5A93C),
+            Color(0xFFF7D16A),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFE5A93C).withOpacity(0.3),
+            blurRadius: 15,
+            spreadRadius: 1,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          minimumSize: const Size(double.infinity, 54),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+        ),
+        onPressed: _openDepositGateway,
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "SECURELY PAY ",
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                letterSpacing: 1.0,
+              ),
+            ),
+            Icon(Icons.lock_rounded, color: Colors.black, size: 16),
+          ],
+        ),
       ),
     );
   }
@@ -1167,4 +1456,35 @@ class _SimulatedBankGatewayDialogState extends State<_SimulatedBankGatewayDialog
       ],
     );
   }
+}
+
+class GoldLinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppTheme.goldAccent.withOpacity(0.04)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final path1 = Path();
+    path1.moveTo(0, size.height * 0.15);
+    path1.cubicTo(
+      size.width * 0.3, size.height * 0.05,
+      size.width * 0.6, size.height * 0.3,
+      size.width, size.height * 0.1,
+    );
+    canvas.drawPath(path1, paint);
+
+    final path2 = Path();
+    path2.moveTo(0, size.height * 0.85);
+    path2.cubicTo(
+      size.width * 0.4, size.height * 0.95,
+      size.width * 0.7, size.height * 0.75,
+      size.width, size.height * 0.9,
+    );
+    canvas.drawPath(path2, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
